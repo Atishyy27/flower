@@ -19,7 +19,7 @@ from collections.abc import Callable
 from flwr.supercore.task_process.usage import TaskUsageRecorder
 from flwr.supercore.typing import JSONObject, JSONValue
 
-from . import browser_use, web_fetch, web_search
+from . import browser_use, slack, web_fetch, web_search
 
 ConnectorHandler = Callable[..., JSONValue]
 ConnectorToolFactory = Callable[[], JSONObject]
@@ -30,7 +30,15 @@ _CONNECTOR_HANDLERS: dict[str, ConnectorHandler] = {
     web_fetch.WEB_FETCH_CONNECTOR_NAME: web_fetch.invoke_web_fetch_provider,
     browser_use.BROWSER_USE_CONNECTOR_NAME: browser_use.invoke_browser_use_provider,
 }
-_CREDENTIAL_CONNECTOR_HANDLERS: dict[str, ConnectorHandler] = {}
+_CREDENTIAL_CONNECTOR_HANDLERS: dict[str, ConnectorHandler] = dict(
+    slack.SLACK_TOOL_HANDLERS
+)
+_CREDENTIAL_CONNECTOR_REFS: dict[str, str] = dict.fromkeys(
+    slack.SLACK_TOOL_NAMES, slack.SLACK_CONNECTOR_REF
+)
+_CREDENTIAL_CONNECTOR_TOOL_FACTORIES: dict[str, Callable[[], list[JSONObject]]] = {
+    slack.SLACK_CONNECTOR_REF: slack.make_slack_tools,
+}
 _BUILTIN_CONNECTOR_TOOL_FACTORIES: dict[str, ConnectorToolFactory] = {
     web_search.WEB_SEARCH_CONNECTOR_NAME: web_search.make_web_search_tool,
     web_fetch.WEB_FETCH_CONNECTOR_NAME: web_fetch.make_web_fetch_tool,
@@ -66,6 +74,24 @@ def invoke_connector(
 def requires_connector_credentials(name: str) -> bool:
     """Return whether a connector uses account-scoped credentials."""
     return name in _CREDENTIAL_CONNECTOR_HANDLERS
+
+
+def get_connector_ref(name: str) -> str:
+    """Return the connector reference that owns one tool name."""
+    if name in _CREDENTIAL_CONNECTOR_HANDLERS:
+        return _CREDENTIAL_CONNECTOR_REFS.get(name, name)
+    return name
+
+
+def get_connector_tools(connector_ref: str) -> list[JSONObject]:
+    """Return model-facing tools for one built-in or OAuth connector."""
+    make_builtin_tool = _BUILTIN_CONNECTOR_TOOL_FACTORIES.get(connector_ref)
+    if make_builtin_tool is not None:
+        return [make_builtin_tool()]
+    make_tools = _CREDENTIAL_CONNECTOR_TOOL_FACTORIES.get(connector_ref)
+    if make_tools is None:
+        raise ValueError(f"Unsupported connector '{connector_ref}'.")
+    return make_tools()
 
 
 def get_builtin_connector_tools() -> list[JSONObject]:

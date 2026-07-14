@@ -37,7 +37,10 @@ from flwr.supercore.json_message.connector_message import (
     ConnectorResponse,
 )
 from flwr.supercore.json_message.model_message import ModelRequest, ModelResponse
-from flwr.supercore.task_process.connector.registry import get_builtin_connector_tool
+from flwr.supercore.task_process.connector.registry import (
+    get_connector_ref,
+    get_connector_tools,
+)
 from flwr.supercore.typing import JSONObject, JSONValue
 from flwr.supercore.utils import strict_json_dumps
 
@@ -72,8 +75,8 @@ class RuntimeAgentConnectors(AgentConnectors):
         self._responses = responses
 
     def tools(self, names: Sequence[str]) -> list[JSONObject]:
-        """Return model-facing tool schemas for built-in connectors."""
-        return [get_builtin_connector_tool(name) for name in names]
+        """Return model-facing tool schemas for the requested connectors."""
+        return [tool for name in names for tool in get_connector_tools(name)]
 
     def call(self, tool_call: JSONObject) -> JSONObject:
         """Execute one model function_call and return a function_call_output item."""
@@ -156,7 +159,9 @@ class RuntimeAgentResponses(AgentResponses):
     ) -> JSONValue:
         """Create one connector response through a child connector task."""
         create_res = self._stub.CreateTask(
-            CreateTaskRequest(type=TaskType.CONNECTOR, connector_ref=name)
+            CreateTaskRequest(
+                type=TaskType.CONNECTOR, connector_ref=get_connector_ref(name)
+            )
         )
         if not create_res.HasField("task_id"):
             raise RuntimeError("Connector task could not be created.")

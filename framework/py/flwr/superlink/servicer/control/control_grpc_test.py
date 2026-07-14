@@ -24,6 +24,7 @@ from flwr.supercore.interceptors import (
 )
 from flwr.superlink.auth_plugin import NoOpControlAuthnPlugin, NoOpControlAuthzPlugin
 
+from .connectors.slack import SlackOAuthProvider
 from .control_grpc import run_control_api_grpc
 
 
@@ -59,3 +60,38 @@ def test_run_control_api_grpc_adds_expected_interceptors() -> None:
         isinstance(interceptor, RuntimeVersionServerInterceptor)
         for interceptor in interceptors
     )
+
+
+def test_run_control_api_grpc_registers_configured_oauth_providers() -> None:
+    """The production Control server should load configured OAuth providers."""
+    grpc_server = Mock(bound_address="127.0.0.1:9093")
+    provider = SlackOAuthProvider(
+        client_id="client-id",
+        client_secret="client-secret",
+        redirect_uri="https://client.example/oauth/slack",
+    )
+    with (
+        patch(
+            "flwr.superlink.servicer.control.control_grpc.get_license_plugin",
+            return_value=None,
+        ),
+        patch(
+            "flwr.superlink.servicer.control.control_grpc.get_configured_connector_oauth_providers",
+            return_value=[provider],
+        ),
+        patch(
+            "flwr.superlink.servicer.control.control_grpc.generic_create_grpc_server",
+            return_value=grpc_server,
+        ) as create_grpc_server,
+    ):
+        run_control_api_grpc(
+            address="127.0.0.1:9093",
+            state_factory=Mock(),
+            objectstore_factory=Mock(),
+            certificates=None,
+            authn_plugin=NoOpControlAuthnPlugin(Path(), False),
+            authz_plugin=NoOpControlAuthzPlugin(Path(), False),
+        )
+
+    servicer = create_grpc_server.call_args.kwargs["servicer_and_add_fn"][0]
+    assert servicer.connector_oauth_providers == {"slack": provider}

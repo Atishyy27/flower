@@ -29,6 +29,7 @@ from flwr.supercore.json_message.connector_message import (
 from flwr.supercore.typing import JSONObject
 
 from . import registry
+from .slack import SLACK_SEARCH_MESSAGES_TOOL
 from .task import handle_task
 
 
@@ -124,6 +125,37 @@ def test_handle_task_keeps_builtin_connectors_credential_free() -> None:
     invoke_connector.assert_called_once()
     assert invoke_connector.call_args.kwargs["credentials"] is None
     assert invoke_connector.call_args.kwargs["config"] is None
+
+
+def test_handle_task_loads_slack_connection_for_slack_tool() -> None:
+    """A Slack tool should load credentials using the shared Slack reference."""
+    stub = Mock()
+    stub.GetConnector.return_value = GetConnectorResponse(
+        connector_ref="slack",
+        credentials_json='{"access_token":"secret"}',
+        config_json='{"team_id":"T123"}',
+    )
+
+    with (
+        patch(
+            "flwr.supercore.task_process.connector.task._pull_connector_request",
+            return_value=_connector_request(SLACK_SEARCH_MESSAGES_TOOL),
+        ),
+        patch(
+            "flwr.supercore.task_process.connector.task.invoke_connector",
+            return_value={"matches": []},
+        ) as invoke_connector,
+    ):
+        handle_task(stub=stub, task_id=22, run_id=7)
+
+    stub.GetConnector.assert_called_once_with(
+        GetConnectorRequest(connector_ref="slack")
+    )
+    assert invoke_connector.call_args.kwargs["name"] == SLACK_SEARCH_MESSAGES_TOOL
+    assert invoke_connector.call_args.kwargs["credentials"] == {
+        "access_token": "secret"
+    }
+    assert invoke_connector.call_args.kwargs["config"] == {"team_id": "T123"}
 
 
 def test_handle_task_does_not_expose_credentials_in_provider_errors() -> None:

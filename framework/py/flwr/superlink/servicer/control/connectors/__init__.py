@@ -21,10 +21,13 @@ from .provider import (
     ConnectorOAuthResult,
     make_connector_oauth_provider_map,
 )
+from .slack import SlackOAuthProvider, get_configured_connector_oauth_providers
 
 __all__ = [
     "ConnectorDefinition",
     "ConnectorOAuthProvider",
     "ConnectorOAuthResult",
+    "SlackOAuthProvider",
+    "get_configured_connector_oauth_providers",
     "make_connector_oauth_provider_map",
 ]

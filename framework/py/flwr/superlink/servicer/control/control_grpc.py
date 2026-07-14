@@ -39,7 +39,7 @@ from flwr.superlink.auth_plugin import (
     NoOpControlAuthnPlugin,
 )
 
-from .connectors import ConnectorOAuthProvider
+from .connectors import ConnectorOAuthProvider, get_configured_connector_oauth_providers
 from .control_account_auth_interceptor import ControlAccountAuthInterceptor
 from .control_event_log_interceptor import ControlEventLogInterceptor
 from .control_license_interceptor import ControlLicenseInterceptor
@@ -64,12 +64,15 @@ def run_control_api_grpc(
     event_log_plugin: EventLogWriterPlugin | None = None,
     artifact_provider: ArtifactProvider | None = None,
     fleet_api_type: str | None = None,
-    connector_oauth_providers: Sequence[ConnectorOAuthProvider] = (),
+    connector_oauth_providers: Sequence[ConnectorOAuthProvider] | None = None,
 ) -> grpc.Server:
     """Run Control API (gRPC, request-response)."""
     license_plugin: LicensePlugin | None = get_license_plugin()
     if license_plugin and not license_plugin.check_license():
         flwr_exit(ExitCode.SUPERLINK_LICENSE_INVALID)
+
+    if connector_oauth_providers is None:
+        connector_oauth_providers = get_configured_connector_oauth_providers()
 
     control_servicer: grpc.Server = ControlServicer(
         linkstate_factory=state_factory,

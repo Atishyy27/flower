@@ -34,7 +34,11 @@ from flwr.supercore.task_process.usage import TaskUsageRecorder
 from flwr.supercore.typing import JSONObject
 from flwr.supercore.utils import strict_json_loads
 
-from .registry import invoke_connector, requires_connector_credentials
+from .registry import (
+    get_connector_ref,
+    invoke_connector,
+    requires_connector_credentials,
+)
 
 
 def handle_task(
@@ -64,14 +68,17 @@ def handle_task(
 
     response = None
     name = cast(str, request_message.payload["name"])
+    connector_ref = get_connector_ref(name)
     uses_credentials = requires_connector_credentials(name)
     credential_failure = False
     try:
         credentials: JSONObject | None = None
         config: JSONObject | None = None
         if uses_credentials:
-            connector = stub.GetConnector(GetConnectorRequest(connector_ref=name))
-            if connector.connector_ref != name:
+            connector = stub.GetConnector(
+                GetConnectorRequest(connector_ref=connector_ref)
+            )
+            if connector.connector_ref != connector_ref:
                 raise RuntimeError("Connector credentials could not be loaded.")
             credentials = _parse_connector_json(connector.credentials_json)
             config = _parse_connector_json(connector.config_json)
